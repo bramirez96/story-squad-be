@@ -52,6 +52,10 @@ jest.mock('../../lib/dsRequests', () => ({
     Promise.resolve({
       data: JSON.stringify({ data: {}, layout: {} }),
     }),
+  getHistogram: () =>
+    Promise.resolve({
+      data: JSON.stringify({ data: {}, layout: {} }),
+    }),
 }));
 jest.mock('../../lib/pinHashing', () => ({
   hashPin: (pin) => pin,

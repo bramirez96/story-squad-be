@@ -6,7 +6,7 @@ const children = [...new Array(8)].map((i, idx) => ({
   PIN: `${bc.hashSync(`000${idx}`, process.env.BCRYPT_ROUNDS || 6)}`,
   ParentID: `${Math.floor((idx + 2) / 2)}`,
   AvatarID: `${faker.random.number({ min: 1, max: 8 })}`,
-  GradeLevelID: `${faker.random.number({ min: 1, max: 6 })}`,
+  GradeLevelID: `1`, // Make all chidlren grade 3 for testing viz
   CohortID: 1,
   IsDyslexic: `${faker.random.boolean()}`,
 }));

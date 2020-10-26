@@ -122,29 +122,73 @@ const findOrCreate = async (parent) => {
  *                   into a Plotly graph component
  */
 const getVisualizations = async (ChildID) => {
-  try {
-    return db.transaction(async (trx) => {
-      // Returns an array of objects with { Name, Complexity }
-      const complexities = await trx('Children AS C')
-        .join('Submissions AS S', 'C.ID', 'S.ChildID')
-        .where('C.ID', ChildID)
-        .orderBy('S.ID', 'asc')
-        .select(['C.Name', 'Complexity']);
-      if (complexities.length <= 0) throw new Error('NotFound');
+  return db.transaction(async (trx) => {
+    try {
+      // Gets formatted data to send to DS
+      const lineGraphData = await getLineGraphData(trx, ChildID);
+      // Throws an error if child has no submissions
+      if (!lineGraphData.ScoreHistory || lineGraphData.ScoreHistory.length <= 0)
+        throw new Error('NotFound');
 
-      // Formats the array into a single object with { StudentName, ScoreHistory: [] }
-      const lineGraphData = formatLineGraphBody(complexities);
+      const histogramData = await getHistogramData(trx, ChildID);
       // Sends the formatted data to the DS API
-      const { data } = await dsApi.getLineGraph(lineGraphData);
+      const { data: jsonLine } = await dsApi.getLineGraph(lineGraphData);
+      const { data: jsonHist } = await dsApi.getHistogram(histogramData);
 
-      // Parses that data into a JS object and returns it to the client
-      const res = JSON.parse(data);
-      return res;
-    });
-  } catch (err) {
-    console.log({ err: err.message });
-    throw new Error(err.message);
-  }
+      // Parses the data into JS objects and returns them to the client
+      const line = JSON.parse(jsonLine);
+      const hist = JSON.parse(jsonHist);
+
+      return { line, hist };
+    } catch (err) {
+      console.log({ err: err.message });
+      throw new Error(err.message);
+    }
+  });
+};
+
+const getLineGraphData = async (conn, ChildID) => {
+  // Returns an array of objects with { Name, Complexity }
+  const complexities = await conn('Children AS C')
+    .join('Submissions AS S', 'C.ID', 'S.ChildID')
+    .where('C.ID', ChildID)
+    .orderBy('S.ID', 'asc')
+    .select(['C.Name', 'Complexity']);
+
+  return formatLineGraphBody(complexities);
+};
+
+const getHistogramData = async (conn, ChildID) => {
+  const child = await conn('Children AS C')
+    .join('GradeLevels AS G', 'C.GradeLevelID', 'G.ID')
+    .join('Submissions AS S', 'C.ID', 'S.ChildID')
+    .where('C.ID', ChildID)
+    .orderBy('S.ID', 'desc')
+    .first()
+    .select(['C.Name', 'Complexity', 'GradeLevel', 'StoryID']);
+
+  const complexities = await conn('Submissions AS S')
+    .join('Children AS C', 'C.ID', 'S.ChildID')
+    .join('GradeLevels AS G', 'G.ID', 'C.GradeLevelID')
+    .where('G.GradeLevel', child.GradeLevel)
+    .andWhere('S.StoryID', child.StoryID)
+    .select('Complexity');
+
+  console.log({ complexities });
+
+  return formatHistogramBody(child, complexities);
+};
+
+const formatHistogramBody = (child, complexities) => {
+  const res = {};
+
+  res.StudentName = child.Name;
+  res.StudentScore = child.Complexity;
+  res.GradeLevel = child.GradeLevel;
+
+  res.GradeList = complexities.map((x) => x.Complexity);
+
+  return res;
 };
 
 module.exports = {
